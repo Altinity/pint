@@ -1958,6 +1958,91 @@ rule {
 				checks.RangeQueryCheckName + "(1h)",
 			},
 		},
+		{
+			title: "state mismatch",
+			config: `
+rule {
+  match {
+    state = ["renamed"]
+  }
+  aggregate ".+" {
+    severity = "bug"
+	keep     = ["job"]
+  }
+}
+rule {
+  ignore {
+    state = ["modified"]
+  }
+  aggregate ".+" {
+    severity = "bug"
+	strip    = ["instance", "rack"]
+  }
+}`,
+			entry: discovery.Entry{
+				State: discovery.Modified,
+				Path: discovery.Path{
+					Name:          "rules.yml",
+					SymlinkTarget: "rules.yml",
+				},
+				Rule: newRule(t, `
+- record: foo
+  expr: sum(foo)
+`),
+			},
+			checks: []string{
+				checks.SyntaxCheckName,
+				checks.AlertForCheckName,
+				checks.ComparisonCheckName,
+				checks.TemplateCheckName,
+				checks.FragileCheckName,
+				checks.RegexpCheckName,
+			},
+		},
+		{
+			title: "state match",
+			config: `
+rule {
+  match {
+    state = ["renamed"]
+  }
+  aggregate ".+" {
+    severity = "bug"
+	keep     = ["job"]
+  }
+}
+rule {
+  ignore {
+    state = ["modified"]
+  }
+  aggregate ".+" {
+    severity = "bug"
+	strip    = ["instance", "rack"]
+  }
+}`,
+			entry: discovery.Entry{
+				State: discovery.Moved,
+				Path: discovery.Path{
+					Name:          "rules.yml",
+					SymlinkTarget: "rules.yml",
+				},
+				Rule: newRule(t, `
+- record: foo
+  expr: sum(foo)
+`),
+			},
+			checks: []string{
+				checks.SyntaxCheckName,
+				checks.AlertForCheckName,
+				checks.ComparisonCheckName,
+				checks.TemplateCheckName,
+				checks.FragileCheckName,
+				checks.RegexpCheckName,
+				checks.AggregationCheckName + "(job:true)",
+				checks.AggregationCheckName + "(instance:false)",
+				checks.AggregationCheckName + "(rack:false)",
+			},
+		},
 	}
 
 	dir := t.TempDir()
@@ -2313,6 +2398,14 @@ func TestConfigErrors(t *testing.T) {
   }
 }`,
 			err: `not a valid duration string: "abc"`,
+		},
+		{
+			config: `rule {
+  match {
+    state = ["added", "foo"]
+  }
+}`,
+			err: "unknown rule state: foo",
 		},
 	}
 
